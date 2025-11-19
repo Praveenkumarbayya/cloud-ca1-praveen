@@ -63,16 +63,9 @@ async function getSecret(secretName) {
     }
 
     // Initialize Sequelize
+    // Note: When using Cloud SQL Unix socket, SSL is not needed (proxy handles encryption)
     const sequelize = new Sequelize(process.env.DATABASE_URL, {
       dialect: 'postgres',
-      dialectOptions: process.env.NODE_ENV === 'production'
-        ? {
-            ssl: {
-              require: true,
-              rejectUnauthorized: false,
-            },
-          }
-        : {},
     });
 
     // Define the Visit model

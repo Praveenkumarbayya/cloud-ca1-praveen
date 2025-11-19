@@ -7,12 +7,10 @@ This guide displays how to deploy the application locally and further down descr
 
 This guide explains how to deploy the application to **Google Cloud App Engine** with **Cloud SQL for PostgreSQL** and **Secret Manager** for secure configuration.
 
-> **⚠️ IMPORTANT SECURITY WARNING:**
-> This application is designed **for educational purposes only** and is **NOT production-ready**. Specifically:
-> - **SSL certificate validation is DISABLED** in the database configuration (`rejectUnauthorized: false`)
-> - This makes the application **vulnerable to man-in-the-middle attacks**
-> - For production use, you MUST enable SSL certificate validation and properly configure Cloud SQL SSL certificates
-> - Do NOT use this configuration for applications handling sensitive or real user data
+> **⚠️ EDUCATIONAL PURPOSE:**
+> This application is designed **for educational purposes only** to teach students how to deploy Node.js applications to Google Cloud Platform.
+> - The database connection uses Cloud SQL Unix socket (secure by default via Cloud SQL proxy)
+> - For production applications, review and implement additional security measures appropriate for your use case
 
 ---
 
@@ -240,18 +238,46 @@ gcloud sql users set-password postgres \
 
 ## **5. Store Database URL in Secret Manager**
 
-Important step - please follow the instructions carefully.
+⚠️ **CRITICAL STEP** - Please follow these instructions carefully.
 
-Generate the `DATABASE_URL` string:
-```bash
-echo -n "postgresql://secure_user:secure_password@/client_info?host=/cloudsql/<INSTANCE_CONNECTION_NAME>" | \
-gcloud secrets create DATABASE_URL --data-file=-
-```
+### 5.1 Get Your Cloud SQL Instance Connection Name
 
-Replace `<INSTANCE_CONNECTION_NAME>` with the connection name of your Cloud SQL instance:
+First, get the full connection name of your Cloud SQL instance:
 ```bash
 gcloud sql instances describe my-postgres-instance --format="value(connectionName)"
 ```
+
+This will output something like: `your-project-id:europe-west2:my-postgres-instance`
+
+### 5.2 Create the DATABASE_URL Secret
+
+Now create the `DATABASE_URL` secret, **replacing the placeholders** with your actual values:
+
+```bash
+echo -n "postgresql://secure_user:secure_password@/client_info?host=/cloudsql/YOUR_PROJECT_ID:REGION:INSTANCE_NAME" | \
+gcloud secrets create DATABASE_URL --data-file=-
+```
+
+**Example with actual values:**
+```bash
+echo -n "postgresql://secure_user:secure_password@/client_info?host=/cloudsql/ip-info-db-478512:europe-west2:my-postgres-instance" | \
+gcloud secrets create DATABASE_URL --data-file=-
+```
+
+**Important Notes:**
+- ✅ Use the **exact** username and password you set in step 4.3 (`secure_user` / `secure_password`)
+- ✅ Use the **full** connection name from step 5.1 (format: `PROJECT_ID:REGION:INSTANCE_NAME`)
+- ❌ Do NOT use `<INSTANCE_CONNECTION_NAME>` literally - it's a placeholder!
+- ❌ Do NOT add SSL configuration - Cloud SQL Unix socket handles encryption automatically
+
+### 5.3 Verify the Secret
+
+To verify the secret was created correctly:
+```bash
+gcloud secrets versions access latest --secret="DATABASE_URL"
+```
+
+You should see your full DATABASE_URL string (without `<INSTANCE_CONNECTION_NAME>` placeholder).
 
 ---
 
@@ -419,8 +445,7 @@ This application includes several security best practices for educational purpos
 - **Input Validation**: Query parameters (page, limit) are validated to prevent injection attacks
 - **Content Security Policy**: Configured to allow Bootstrap CDN while maintaining security
 - **Graceful Shutdown**: The app properly handles SIGTERM signals for clean shutdowns in cloud environments
-
-⚠️ **However**: SSL certificate validation is disabled (`rejectUnauthorized: false`) for educational simplicity. See security warning at top of README.
+- **Secure Cloud SQL Connection**: Uses Cloud SQL Unix socket for encrypted database connections (no SSL configuration needed)
 
 ### **Health Check Endpoint**
 The application includes a health check endpoint at `/_health` that returns:
@@ -479,16 +504,62 @@ Then edit `.env` with your desired credentials if needed.
 ### **Issue: models/index.js references config.json instead of config.js**
 **Note:** This has been fixed in the latest version (line 9 of models/index.js now correctly references config.js). If you encounter this error, update line 9 from `config.json` to `config.js`.
 
+### **GCP Deployment: "Failed to initialize application: connect EIO /cloudsql/<INSTANCE_CONNECTION_NAME>"**
+
+**Cause:** The DATABASE_URL secret contains the literal placeholder `<INSTANCE_CONNECTION_NAME>` instead of the actual Cloud SQL instance connection name.
+
+**Solution:**
+1. Get your instance connection name:
+   ```bash
+   gcloud sql instances describe my-postgres-instance --format="value(connectionName)"
+   ```
+2. Update the DATABASE_URL secret with the actual connection name:
+   ```bash
+   echo -n "postgresql://secure_user:secure_password@/client_info?host=/cloudsql/YOUR_ACTUAL_CONNECTION_NAME" | \
+   gcloud secrets versions add DATABASE_URL --data-file=-
+   ```
+3. Redeploy the application:
+   ```bash
+   gcloud app deploy --quiet
+   ```
+
+### **GCP Deployment: "The server does not support SSL connections"**
+
+**Cause:** The application code has SSL configuration enabled for Cloud SQL Unix socket connections (which don't support SSL).
+
+**Solution:** This should not occur with the current version. Cloud SQL Unix socket connections handle encryption automatically via the Cloud SQL proxy and do not require SSL configuration in the application code. If you see this error, ensure your `app.js` Sequelize configuration does NOT include `dialectOptions` with SSL settings.
+
+### **GCP Deployment: "password authentication failed for user 'secure_user'"**
+
+**Cause:** The password in the DATABASE_URL secret doesn't match the actual Cloud SQL user password.
+
+**Solution:**
+1. Reset the Cloud SQL user password to match the DATABASE_URL:
+   ```bash
+   gcloud sql users set-password secure_user \
+       --instance=my-postgres-instance \
+       --password=secure_password
+   ```
+   OR update the DATABASE_URL secret with the correct password (use the exact same password from step 4.3)
+
+2. Verify they match:
+   ```bash
+   gcloud secrets versions access latest --secret="DATABASE_URL"
+   ```
+
 ### **Database Connection Issues**
-- Verify the `DATABASE_URL` secret is correctly configured
+- Verify the `DATABASE_URL` secret is correctly configured (no placeholders like `<INSTANCE_CONNECTION_NAME>`)
 - Ensure the Cloud SQL instance has the correct user, password, and database
 - Check Cloud SQL connection name matches the one in DATABASE_URL
+- Verify username/password in DATABASE_URL matches the Cloud SQL user credentials
 
 ### **Permission Errors**
 - Ensure the App Engine service account has the `roles/secretmanager.secretAccessor` role
 - Verify the service account email format: `<PROJECT_ID>@appspot.gserviceaccount.com`
+- Run the IAM binding command from step 6 if unsure
 
 ### **Deployment Failures**
 - Check the Cloud Build logs in the Google Cloud Console for more details
 - Verify migrations ran successfully during the Cloud Build step
 - Check that all required APIs are enabled (App Engine, Cloud Build, Cloud SQL, Secret Manager)
+- Check App Engine logs: `gcloud app logs read --limit=50`
