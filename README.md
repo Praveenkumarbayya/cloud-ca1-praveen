@@ -1,4 +1,4 @@
-
+# Deployed using Google Cloud Build
 # **Visit Logs Application**
 
 This is a Node.js application that logs client information, including IP address, geolocation data, browser details, and visit timestamps, to a PostgreSQL database. It allows viewing logs in a paginated table format.
@@ -564,3 +564,5 @@ Then edit `.env` with your desired credentials if needed.
 - Verify migrations ran successfully during the Cloud Build step
 - Check that all required APIs are enabled (App Engine, Cloud Build, Cloud SQL, Secret Manager)
 - Check App Engine logs: `gcloud app logs read --limit=50`
+This is a test update to trigger Cloud Build deployment.
+Developer: Praveen Kumar Bayya
