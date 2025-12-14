@@ -1,3 +1,5 @@
+# Client Information Database Sample Application
+
 # Deployed using Google Cloud Build
 # **Visit Logs Application**
 
@@ -6,6 +8,20 @@ This is a Node.js application that logs client information, including IP address
 This guide displays how to deploy the application locally and further down describes how to deploy it to Google Cloud.
 
 This guide explains how to deploy the application to **Google Cloud App Engine** with **Cloud SQL for PostgreSQL** and **Secret Manager** for secure configuration.
+## Live Application URL
+https://cpd-ca1-praveen.appspot.com
+## CA Deployment Summary
+
+Technologies used:
+- Google App Engine (Node.js 22)
+- Google Cloud SQL (PostgreSQL)
+- Google Cloud Build (CI/CD)
+- Google Secret Manager
+- GitHub
+
+The application is automatically deployed using Cloud Build when code is pushed to the main branch.
+
+
 
 > **⚠️ EDUCATIONAL PURPOSE:**
 > This application is designed **for educational purposes only** to teach students how to deploy Node.js applications to Google Cloud Platform.
@@ -566,3 +582,4 @@ Then edit `.env` with your desired credentials if needed.
 - Check App Engine logs: `gcloud app logs read --limit=50`
 This is a test update to trigger Cloud Build deployment.
 Developer: Praveen Kumar Bayya
+Student I'D:20002813
